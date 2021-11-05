@@ -1,4 +1,4 @@
-# App Provisioning and Depoloying
+# App Provisioning and Deploying
 * Use ISAC to provision the app to azure cloud - Terraform https://github.com/ozzy045/Terraform.git
 * Use Configuration Management to deploy the app to azure cloud - Ansible https://github.com/ozzy045/Ansible-New.git
 
