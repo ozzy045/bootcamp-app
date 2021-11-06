@@ -1,3 +1,5 @@
+### In this project i am using nodejs app and perform DevOps procedures by using tools and methodologies ###
+
 # App Provisioning and Deploying
 * Use ISAC to provision the infrastucture to azure cloud - [Terraform](https://github.com/ozzy045/Terraform.git)
 * Use Configuration Management to deploy the app to azure machines - [Ansible](https://github.com/ozzy045/Ansible-New.git)
