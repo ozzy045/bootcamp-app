@@ -1,0 +1,117 @@
+name: $(Build.DefinitionName)-$(Build.BuildId)
+
+trigger:
+- master
+- feature/*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+    containerRegistry: 'orzaguricicd'
+    dockerFilePath: 'Dockerfile'
+    serviceName: weightracker
+    imageTag: $(Build.BuildId)
+
+
+stages:
+
+# Continuous Integration Process
+- stage: CI
+  jobs:
+  - job: BuildAndPushDocker
+    workspace: 
+      clean: all
+    steps:
+    
+    
+    - task: Docker@0
+      displayName: 'Build Docker Image'
+      inputs:
+        containerregistrytype: 'Azure Container Registry'
+        azureSubscription: 'Azure Pass - Sponsorship(1)(ccd0f841-e486-4896-8a31-6ddd232b5e1d)'
+        azureContainerRegistry: '{"loginServer":"orzaguricicd.azurecr.io", "id" : "/subscriptions/ccd0f841-e486-4896-8a31-6ddd232b5e1d/resourceGroups/Staging/providers/Microsoft.ContainerRegistry/registries/orzaguricicd"}'
+        action: 'Build an Image'
+        dockerFile: '$(dockerFilePath)'
+        imageName: '$(containerRegistry).azurecr.io/$(serviceName):$(imageTag)'
+
+    - task: Docker@2
+      condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+      displayName: 'Login to Registry'
+      inputs: 
+        containerRegistry: 'orzaguricicd'
+        command: 'login'
+
+    - task: Docker@0
+      condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+      displayName: 'Push Docker Image'
+      inputs:
+        dockerRegistryEndpoint: 'orzaguricicd'
+        containerregistrytype: 'Azure Container Registry'
+        azureSubscription: 'Azure Pass - Sponsorship(1)(ccd0f841-e486-4896-8a31-6ddd232b5e1d)'
+        azureContainerRegistry: '{"loginServer":"orzaguricicd.azurecr.io", "id" : "/subscriptions/ccd0f841-e486-4896-8a31-6ddd232b5e1d/resourceGroups/Staging/providers/Microsoft.ContainerRegistry/registries/orzaguricicd"}'
+        action: 'Push an image'
+        imageName: '$(containerRegistry).azurecr.io/$(serviceName):$(imageTag)'
+
+
+
+# Continuous Deployment Process for Staging Environment
+- stage: DeployToStaging
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  variables:
+  - group: Staging
+  jobs:
+  - deployment: staging
+    displayName: Deploy to Staging
+    environment:
+      name: Staging
+      resourceType: VirtualMachine
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: CmdLine@2
+            displayName: Stop Current Container
+            inputs:
+              script: 'docker rm -f weightracker || true'
+          - task: Docker@2
+            displayName: 'Login to Registry'
+            inputs: 
+              containerRegistry: 'orzaguricicd'
+              command: 'login'
+
+          - task: Bash@3
+            displayName:  Run New Container
+            inputs:
+              targetType: 'inline'
+              script: 'docker run -d --restart=always --name weightracker -p 8080:8080 -e PGHOST=$(PGHOST) -e PORT=$(PORT) -e HOST=$(HOST) -e PGUSERNAME=$(PGUSERNAME) -e PGDATABASE=postgres -e PGPASSWORD=$(PGPASSWORD) -e PGPORT=$(PGPORT) -e HOST_URL=$(HOST_URL) -e COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) -e NODE_ENV=development -e OKTA_ORG_URL=$(OKTA_ORG_URL) -e OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) -e OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) $(containerRegistry).azurecr.io/weightracker:$(imageTag)'
+
+# Continuous Delivery Process for Production Environment
+- stage: DeployToProduction
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  variables:
+  - group: Production
+  jobs:
+  - deployment: production
+    displayName: Deploy to Production
+    environment:
+      name: Production
+      resourceType: VirtualMachine
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: CmdLine@2
+            displayName: Stop Current Container
+            inputs:
+              script: 'docker rm -f weightracker || true'
+          - task: Docker@2
+            displayName: 'Login to Registry'
+            inputs: 
+              containerRegistry: 'orzaguricicd'
+              command: 'login'
+          - task: Bash@3
+            displayName:  Run New Container
+            inputs:
+              targetType: 'inline'
+              script: 'docker run -d --restart=always --name weightracker -p 8080:8080 -e PGHOST=$(PGHOST) -e PORT=$(PORT) -e HOST=$(HOST) -e PGUSERNAME=$(PGUSERNAME) -e PGDATABASE=postgres -e PGPASSWORD=$(PGPASSWORD) -e PGPORT=$(PGPORT) -e HOST_URL=$(HOST_URL) -e COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) -e NODE_ENV=development -e OKTA_ORG_URL=$(OKTA_ORG_URL) -e OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) -e OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) $(containerRegistry).azurecr.io/weightracker:$(imageTag)'
